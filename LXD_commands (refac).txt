@@ -1,0 +1,199 @@
+MASTER & SLAVE (KUBERNETES SERVICES)
+
+-----PRE-REQUIREMENT-----
+update repositoies
+sudo su
+apt-get update
+
+
+
+-----SWAP MEMORY-----
+Turn off Swap Space
+swapoff -a
+nano /etc/fstab
+
+
+-----HOSTNAME-----
+
+Update HostName
+nano /etc/hostname
+sudo hostnamectl set-hostname kubernetes-worker
+
+ifconfig
+
+Update Host Files
+nano /etc/hosts
+
+127.0.0.1       localhost
+192.168.1.107   vmaster
+192.168.1.108   vmslavea
+192.168.1.109   vmslaveb
+
+
+-----NETWORKING-----
+Set static IP Addr
+First, install network
+sudo apt-get autoremove --purge ifupdown
+sudo apt-get install ifupdown
+nano /etc/network/interfaces
+
+Add at the end of file
+
+auto lo
+iface lo inet loopback
+
+auto enp0s3
+iface enp0s3 inet dhcp
+
+auto enp0s8
+iface enp0s8 inet static
+address 192.168.1.106
+netmask 255.255.255.0
+
+
+
+-----DOCKER AND SSH-----
+
+Install OpenSHH
+sudo apt-get install -y openssh-server
+
+sudo su
+apt-get install
+***dockers installation***
+sudo systemctl start docker
+sudo systemctl enable docker
+
+-----KUBERNETES CONFIG-----
+apt-get update && apt-get install -y  apt-transport-https curl
+
+
+Installation KubeAdm, Kubelet & Kubectl
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add
+sudo apt-add-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
+sudo apt install kubeadm kubelet kubectl kubernetes-cni
+
+ON MASTER
+
+-----CLUSTER-----
+
+sudo kubeadm init --pod-network-cidr=192.168.0.0/16 --apiserver-advertise-address=192.168.1.106
+//For starting Calico 192.168.0.0/16 or Flannel CNI 10.244.0.0/16
+sudo kubeadm init --apiserver-advertise-address=192.168.1.106
+
+Follow instructions
+
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+
+JOIN TO CLUSTER
+kubeadm join 192.168.1.106:6443 --token wbex2f.q4ztghrwl78o2yrq     --discovery-token-ca-cert-hash sha256:4e9c40be8df1bae7d88c2c28616acac42dbb135af8b335702163cc286b99f516
+
+recreate TOKEN
+kubeadm token create --print-join-command
+
+
+kubectl get nodes					/node status
+kubectl get pods --all namespaces   //pods status
+kubectl get -o wide pods --all-namespaces //detailed status pods
+
+
+
+-----CREATE POD BASED ON CALICO-----
+kubectl apply -f https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/hosted/kubeadm/1.7/calico.yaml
+kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+
+
+
+-----DASHSBOARD-----
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0/aio/deploy/recommended.yaml
+
+To enable proxy
+kubectl proxy
+
+GO TO DASHBOARD
+http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/#/login
+
+Create service account on dashboard
+kubectl create serviceaccount dashboard -n default
+
+kubectl create clusterrolebinding dashboard-admin -n default --clusterrole=cluster-admin --serviceaccount=default:dashboard
+
+kubectl get secret $(kubectl get serviceaccount dashboard -o jsonpath="{.secrets[0].name}") -o jsonpath="{.data.token}" | base64 --decode
+
+
+-----ANOTHER CONFIG-----
+
+sudo add-apt-repository ppa:openjdk-r/ppa
+sudo apt install openjdk-8-jdk openjdk-8-jre
+
+kubectl create secret generic regcred \
+    --from-file=.dockerconfigjson=<path/to/.docker/config.json> \
+    --type=kubernetes.io/dockerconfigjson
+	
+
+CREATE KUBERNETES SECRET TO LOCAL REGISTRY
+https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+cat ~/.docker/config.json
+kubectl create secret docker-registry regcred --docker-server=localhost:5000 --docker-username=jomimart13 --docker-password=123456 --docker-email=stn_rules@hotmail.com
+
+
+-----DRAIN CLUSTER-----
+sudo kubeadm reset
+sudo apt-get purge kubeadm kubectl kubelet kubernetes-cni kube*   
+sudo apt-get autoremove  
+sudo rm -rf ~/.kube
+sudo rm -rf /var/lib/etcd
+
+
+arkade install docker-registry-ingress \
+  --stn_rules@hotmail.com \
+  --domain reg.example.com
+  
+https://github.com/learnk8s/spring-boot-k8s-hpa.git
+
+sudo chmod 600 elasticcache-bridge.pem
+
+ssh -i elasticcache-bridge.pem -L 8162:b-cb7f70e5-11b0-4c7d-85ea-e16b08933ed4-1.mq.us-west-1.amazonaws.com:8162 ec2-user@52.9.65.72
+
+https://b-cb7f70e5-11b0-4c7d-85ea-e16b08933ed4-1.mq.us-west-1.amazonaws.com:8162
+
+
+https://microk8s.io/docs/addon-dashboard
+
+
+Paso 11. Instalar aplicación Dummy (nginx)
+kubectl run nginx --image nginx --replicas=3
+kubectl expose deployment nginx --port 80 --target-port 80 --type ClusterIP \ --selector=nginx -- name nginx
+OR
+
+kubectl run sample-nginx --image=nginx:alpine --replicas=2 --port=80
+kubectl get pod <pod_name>
+
+
+https://ubuntu.com/tutorials/install-a-local-kubernetes-with-microk8s#5-host-your-first-service-in-kubernetes
+
+
+microk8s kubectl create deployment nginx-sample --image=nginx:alpine
+microk8s kubectl scale deployment nginx-sample --replicas=2
+microk8s kubectl expose deployment nginx-sample --type=NodePort --port=81 --name=ngnix-service
+
+microk8s kubectl expose deployment nginx-deploy-main --port=80 --name=nginx-deploy-main &&
+microk8s kubectl expose deployment nginx-deploy-blue --port=80 --name=nginx-deploy-blue &&
+microk8s kubectl expose deployment nginx-deploy-green --port=80 --name=nginx-deploy-green
+
+https://github.com/nginxinc
+https://matthewpalmer.net/kubernetes-app-developer/articles/kubernetes-volumes-example-nfs-persistent-volume.html
+https://www.digitalocean.com/community/tutorials/how-to-set-up-an-nfs-mount-on-ubuntu-20-04-es
+
+
+
+SETX JAVA_HOME "C:\Program Files\Java\jdk1.8.0_202"
+SETX -m JAVA_HOME "C:\Program Files\Java\jdk1.8.0_202"
+
+
+microk8s join 192.168.1.107:25000/ae2b6c2fdc142a89dadf200ccf8233b1/b33bb4e1b9ed
+
+
+
